@@ -17,12 +17,13 @@ class AIOrchestratorTest {
     void shouldFallbackToGeminiWhenGroqFails() {
         AIService groq = mock(AIService.class);
         AIService gemini = mock(AIService.class);
+        AIService openRouter = mock(AIService.class);
         AIResponse expected = new AIResponse("reply", 1, 1, 2, "GEMINI");
 
         when(groq.generate("prompt")).thenThrow(new AIClientException("GROQ", "timeout", true, null));
         when(gemini.generate("prompt")).thenReturn(expected);
 
-        AIOrchestrator orchestrator = new AIOrchestrator(groq, gemini);
+        AIOrchestrator orchestrator = new AIOrchestrator(groq, gemini, openRouter);
 
         AIResponse result = orchestrator.generate("prompt");
 
@@ -33,11 +34,13 @@ class AIOrchestratorTest {
     void shouldThrowWhenAllProvidersFail() {
         AIService groq = mock(AIService.class);
         AIService gemini = mock(AIService.class);
+        AIService openRouter = mock(AIService.class);
 
         when(groq.generate("prompt")).thenThrow(new AIClientException("GROQ", "timeout", true, null));
         when(gemini.generate("prompt")).thenThrow(new AIClientException("GEMINI", "bad gateway", true, null));
+        when(openRouter.generate("prompt")).thenThrow(new AIClientException("OPENROUTER", "service unavailable", true, null));
 
-        AIOrchestrator orchestrator = new AIOrchestrator(groq, gemini);
+        AIOrchestrator orchestrator = new AIOrchestrator(groq, gemini, openRouter);
 
         assertThrows(AllProvidersFailedException.class, () -> orchestrator.generate("prompt"));
     }
