@@ -14,7 +14,8 @@ public class EmailController {
     private final AIOrchestrator orchestrator;
     private final EmailPromptFactory promptFactory;
 
-    public EmailController(AIOrchestrator orchestrator, EmailPromptFactory promptFactory) {
+    public EmailController(AIOrchestrator orchestrator, 
+                           EmailPromptFactory promptFactory) {
         this.orchestrator = orchestrator;
         this.promptFactory = promptFactory;
     }
