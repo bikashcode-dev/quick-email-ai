@@ -12,21 +12,21 @@ import org.springframework.stereotype.Service;
 @Service
 public class AIOrchestrator {
 
-    private final AIService groq;
+    private final AIService groqAi;
     private final AIService gemini;
     private final AIService openRouter;
 
     public AIOrchestrator(@Qualifier("groqService") AIService groq,
                           @Qualifier("geminiService") AIService gemini,
                           @Qualifier("openRouterService") AIService openRouter) {
-        this.groq = groq;
+        this.groqAi = groq;
         this.gemini = gemini;
         this.openRouter = openRouter;
     }
 
     public AIResponse generate(String prompt) {
         try {
-            return groq.generate(prompt);
+            return groqAi.generate(prompt);
         } catch (AIClientException groqError) {
             log.warn("Primary provider {} failed (retryable={}): {}",
                     groqError.getProvider(), groqError.isRetryable(), groqError.getMessage());
