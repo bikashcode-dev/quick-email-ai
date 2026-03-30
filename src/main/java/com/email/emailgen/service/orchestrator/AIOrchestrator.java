@@ -38,7 +38,8 @@ public class AIOrchestrator {
             return gemini.generate(prompt);
         } catch (AIClientException geminiError) {
             log.warn("Fallback provider {} failed (retryable={}): {}",
-                    geminiError.getProvider(), geminiError.isRetryable(), geminiError.getMessage());
+                    geminiError.getProvider(), geminiError.isRetryable(),
+                    geminiError.getMessage());
         } catch (Exception geminiError) {
             log.warn("Fallback provider failed unexpectedly: {}", geminiError.getClass().getSimpleName());
         }
