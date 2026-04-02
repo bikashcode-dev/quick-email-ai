@@ -28,9 +28,12 @@ public class EmailController {
     }
 
     private void validateRequest(EmailRequest request) {
-        String mode = request.getMode() == null ? "reply" : request.getMode().trim().toLowerCase();
-        String emailContent = request.getEmailContent() == null ? "" : request.getEmailContent().trim();
-        String instruction = request.getUserInstruction() == null ? "" : request.getUserInstruction().trim();
+        String mode = request
+                .getMode() == null ? "reply" : request.getMode().trim().toLowerCase();
+        String emailContent = request
+                .getEmailContent() == null ? "" : request.getEmailContent().trim();
+        String instruction = request
+                .getUserInstruction() == null ? "" : request.getUserInstruction().trim();
 
         if ("compose".equals(mode) && instruction.isBlank()) {
             throw new IllegalArgumentException("Compose mode requires a user instruction.");

@@ -1,5 +1,4 @@
 package com.email.emailgen.service.orchestrator;
-
 import com.email.emailgen.dto.AIResponse;
 import com.email.emailgen.exception.AIClientException;
 import com.email.emailgen.exception.AllProvidersFailedException;
@@ -29,30 +28,39 @@ public class AIOrchestrator {
             return groqAi.generate(prompt);
         } catch (AIClientException groqError) {
             log.warn("Primary provider {} failed (retryable={}): {}",
-                    groqError.getProvider(), groqError.isRetryable(), groqError.getMessage());
+                    groqError.getProvider(),
+                    groqError.isRetryable(),
+                    groqError.getMessage());
         } catch (Exception groqError) {
-            log.warn("Primary provider failed unexpectedly: {}", groqError.getClass().getSimpleName());
+            log.warn("Primary provider failed unexpectedly: groq fail hua  {}", groqError
+                    .getClass().
+                    getSimpleName());
         }
 
         try {
             return gemini.generate(prompt);
         } catch (AIClientException geminiError) {
             log.warn("Fallback provider {} failed (retryable={}): {}",
-                    geminiError.getProvider(), geminiError.isRetryable(),
+                    geminiError.getProvider(),
+                    geminiError.isRetryable(),
                     geminiError.getMessage());
         } catch (Exception geminiError) {
-            log.warn("Fallback provider failed unexpectedly: {}", geminiError.getClass().getSimpleName());
+            log.warn("Fallback provider failed unexpectedly from gemini ka {}", geminiError.getClass().getSimpleName());
         }
 
         try {
             return openRouter.generate(prompt);
         } catch (AIClientException openRouterError) {
             log.error("Final provider {} failed (retryable={}): {}",
-                    openRouterError.getProvider(), openRouterError.isRetryable(), openRouterError.getMessage());
+                    openRouterError.getProvider(),
+                    openRouterError.isRetryable(),
+                    openRouterError.getMessage());
             throw new AllProvidersFailedException("All AI providers failed.", openRouterError);
         } catch (Exception openRouterError) {
-            log.error("Final provider failed unexpectedly: {}", openRouterError.getClass().getSimpleName());
-            throw new AllProvidersFailedException("All AI providers failed.", openRouterError);
+            log.error("Final provider failed unexpectedly from OpenRouter KA : {}",
+                    openRouterError.getClass()
+                            .getSimpleName());
+            throw new AllProvidersFailedException("All AI provider fail ho gya .", openRouterError);
         }
     }
 }

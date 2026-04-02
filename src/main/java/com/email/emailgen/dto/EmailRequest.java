@@ -10,7 +10,7 @@ public class EmailRequest {
     @Size(max = 12000, message = "Email content must be 12000 characters or fewer")
     private String emailContent;
 
-    @Size(max = 40, message = "Tone must be 40 characters or fewer")
+    @Size(max = 400, message = "Tone must be 400 characters or fewer")
     @Pattern(
             regexp = "^[a-zA-Z\\s-]*$",
             message = "Tone can only contain letters, spaces, and hyphens"

@@ -72,7 +72,7 @@ public class OpenRouterServiceImpl implements AIService {
                     usage.path("prompt_tokens").asInt(),
                     usage.path("completion_tokens").asInt(),
                     usage.path("total_tokens").asInt(),
-                    "OPENROUTER"
+                    "OPEN ROUTER"
             );
         } catch (AIClientException ex) {
             throw ex;
@@ -80,10 +80,10 @@ public class OpenRouterServiceImpl implements AIService {
             throw toClientException(ex);
         } catch (IOException ex) {
             log.error("OpenRouter response parsing failed: {}", ex.getClass().getSimpleName());
-            throw new AIClientException("OPENROUTER", "OpenRouter returned an unreadable response.", false, ex);
+            throw new AIClientException("OPEN ROUTER", "OpenRouter returned an unreadable response.", false, ex);
         } catch (Exception ex) {
             log.error("OpenRouter failed: {}", ex.getClass().getSimpleName());
-            throw new AIClientException("OPENROUTER", "OpenRouter request failed.", isRetryable(ex), ex);
+            throw new AIClientException("OPEN ROUTER", "OpenRouter request failed.", isRetryable(ex), ex);
         }
     }
 
@@ -99,7 +99,7 @@ public class OpenRouterServiceImpl implements AIService {
 
     private AIClientException toClientException(WebClientResponseException ex) {
         boolean retryable = ex.getStatusCode().is5xxServerError() || ex.getStatusCode().value() == 429;
-        return new AIClientException("OPENROUTER",
+        return new AIClientException("OPEN ROUTER",
                 "OpenRouter request failed with status " + ex.getStatusCode().value() + ".",
                 retryable,
                 ex);

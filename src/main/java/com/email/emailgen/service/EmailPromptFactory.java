@@ -85,6 +85,7 @@ public class EmailPromptFactory {
                 Write a brand-new email based on the user's instruction.
                 Always write the email from the user's point of view.
                 The user is the sender of the email, not the recipient.
+                This is compose mode for a brand-new outgoing email, not a reply.
                 If the user says "boss ko email likho", "HOD ko mail likho", "customer support ko likho", or similar, write an email addressed to that person or team.
                 Do not act like customer support, HR, the boss, or the receiver of the email.
                 Do not reply as if you are solving the user's problem from the other side. Instead, draft the email that the user wants to send.
@@ -94,7 +95,11 @@ public class EmailPromptFactory {
                 Compose requirements:
                 - Tone: %s
                 - Understand the user's goal, recipient, and intent from the instruction.
+                - Detect the meaning of the instruction even if the user writes in Hindi, Hinglish, mixed language, or with grammar and spelling mistakes.
+                - Automatically correct grammar, spelling, and wording mistakes before drafting the email.
                 - Write a complete, natural email body that fits the request.
+                - Always generate a fresh outbound email from the user to the intended recipient.
+                - Never generate a reply from the recipient's side unless the user clearly asks for that exact perspective.
                 - Identify the real action the user wants. If they want a return, refund, replacement, leave approval, complaint resolution, escalation, or follow-up, draft an email that directly asks for that action.
                 - Do not turn the email into a weak generic information request unless the user explicitly asks only for information.
                 - If the user reports a damaged, defective, missing, delayed, or wrong product, write a strong but polite customer email asking for the appropriate resolution such as return, refund, or replacement.
@@ -102,7 +107,8 @@ public class EmailPromptFactory {
                 - Support the user's language naturally. If the user writes in Hindi, Hinglish, or another language, match the request appropriately unless they ask for something else.
                 - If important details are missing, keep the email reasonably generic instead of inventing fake facts.
                 - If the user asks for a complaint, return, refund, leave request, approval, rejection, escalation, apology, or follow-up email, draft that exact kind of email.
-                - If the user mentions a recipient type instead of a name, use a suitable greeting such as "Dear Customer Support Team," or "Dear Sir/Madam," when appropriate.
+                - Detect who the email is for and choose a suitable greeting automatically.
+                - If the user mentions a recipient type instead of a name, use a suitable greeting such as "Dear Customer Support Team," "Dear Hiring Manager," "Dear Sir," "Dear Ma'am," or "Dear Sir/Madam," when appropriate.
                 - If the user gives instructions in casual language, local language, Hindi, Hinglish, or mixed language, first understand the meaning and then write a proper email accordingly.
                 - Prefer confident, useful wording over vague wording. The email should feel ready to send.
                 - For customer support scenarios, mention the issue clearly and request a concrete next step.
