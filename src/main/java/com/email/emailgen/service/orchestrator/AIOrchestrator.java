@@ -22,45 +22,49 @@ public class AIOrchestrator {
         this.gemini = gemini;
         this.openRouter = openRouter;
     }
-
     public AIResponse generate(String prompt) {
         try {
-            return groqAi.generate(prompt);
+            return requireValidResponse(groqAi.generate(prompt), "GROQ");
         } catch (AIClientException groqError) {
             log.warn("Primary provider {} failed (retryable={}): {}",
                     groqError.getProvider(),
                     groqError.isRetryable(),
                     groqError.getMessage());
         } catch (Exception groqError) {
-            log.warn("Primary provider failed unexpectedly: groq fail hua  {}", groqError
+            log.warn("Primary provider failed unexpectedly, Groq  {}", groqError
                     .getClass().
                     getSimpleName());
         }
-
         try {
-            return gemini.generate(prompt);
+            return requireValidResponse(gemini.generate(prompt), "GEMINI");
         } catch (AIClientException geminiError) {
             log.warn("Fallback provider {} failed (retryable={}): {}",
                     geminiError.getProvider(),
                     geminiError.isRetryable(),
                     geminiError.getMessage());
         } catch (Exception geminiError) {
-            log.warn("Fallback provider failed unexpectedly from gemini ka {}", geminiError.getClass().getSimpleName());
+            log.warn("Fallback provider failed unexpectedly from gemini {}", geminiError
+                    .getClass().getSimpleName());
         }
 
         try {
-            return openRouter.generate(prompt);
+            return requireValidResponse(openRouter.generate(prompt), "OPEN ROUTER");
         } catch (AIClientException openRouterError) {
             log.error("Final provider {} failed (retryable={}): {}",
-                    openRouterError.getProvider(),
-                    openRouterError.isRetryable(),
-                    openRouterError.getMessage());
+                    openRouterError.getProvider(), openRouterError.isRetryable(), openRouterError.getMessage());
             throw new AllProvidersFailedException("All AI providers failed.", openRouterError);
         } catch (Exception openRouterError) {
-            log.error("Final provider failed unexpectedly from OpenRouter KA : {}",
+            log.error("Final provider failed unexpectedly from OpenRouter: {}",
                     openRouterError.getClass()
                             .getSimpleName());
             throw new AllProvidersFailedException("All AI provider fail ho gya .", openRouterError);
         }
+    }
+
+    private AIResponse requireValidResponse(AIResponse response, String provider) {
+        if (response == null || response.getText() == null || response.getText().trim().isEmpty()) {
+            throw new AIClientException(provider, provider + " returned an empty response.", false, null);
+        }
+        return response;
     }
 }
