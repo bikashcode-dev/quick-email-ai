@@ -22,7 +22,7 @@ public class AIOrchestrator {
         this.gemini = gemini;
         this.openRouter = openRouter;
     }
-
+// need to ad falback system
     public AIResponse generate(String prompt) {
         try {
             return groqAi.generate(prompt);
@@ -32,11 +32,10 @@ public class AIOrchestrator {
                     groqError.isRetryable(),
                     groqError.getMessage());
         } catch (Exception groqError) {
-            log.warn("Primary provider failed unexpectedly: groq fail hua  {}", groqError
+            log.warn("Primary provider failed unexpectedly, Groq  {}", groqError
                     .getClass().
                     getSimpleName());
         }
-
         try {
             return gemini.generate(prompt);
         } catch (AIClientException geminiError) {
@@ -45,19 +44,18 @@ public class AIOrchestrator {
                     geminiError.isRetryable(),
                     geminiError.getMessage());
         } catch (Exception geminiError) {
-            log.warn("Fallback provider failed unexpectedly from gemini ka {}", geminiError.getClass().getSimpleName());
+            log.warn("Fallback provider failed unexpectedly from gemini {}", geminiError
+                    .getClass().getSimpleName());
         }
 
         try {
             return openRouter.generate(prompt);
         } catch (AIClientException openRouterError) {
             log.error("Final provider {} failed (retryable={}): {}",
-                    openRouterError.getProvider(),
-                    openRouterError.isRetryable(),
-                    openRouterError.getMessage());
+                    openRouterError.getProvider(), openRouterError.isRetryable(), openRouterError.getMessage());
             throw new AllProvidersFailedException("All AI providers failed.", openRouterError);
         } catch (Exception openRouterError) {
-            log.error("Final provider failed unexpectedly from OpenRouter KA : {}",
+            log.error("Final provider failed unexpectedly from OpenRouter: {}",
                     openRouterError.getClass()
                             .getSimpleName());
             throw new AllProvidersFailedException("All AI provider fail ho gya .", openRouterError);
