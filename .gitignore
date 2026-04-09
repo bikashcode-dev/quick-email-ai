@@ -36,3 +36,4 @@ build/
 .env
 .env.*
 *.log
+src/main/resources/application-dev.properties
