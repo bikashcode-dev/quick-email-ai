@@ -15,14 +15,17 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.mail.MailException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.util.StringUtils;
 
+import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.List;
+import java.util.Properties;
 
 @Service
 @Slf4j
@@ -37,6 +40,10 @@ public class OtpAuthService {
     private final PasswordEncoder passwordEncoder;
     @Value("${spring.mail.username:}")
     private String mailUsername;
+    @Value("${spring.mail.password:}")
+    private String mailPassword;
+    @Value("${spring.mail.host:smtp.gmail.com}")
+    private String mailHost;
     private final SecureRandom secureRandom = new SecureRandom();
 
     public void sendOtp(String email) {
@@ -188,12 +195,62 @@ public class OtpAuthService {
         try {
             javaMailSender.send(message);
         } catch (MailException exception) {
+            log.warn("Primary OTP email send failed for {} using sender {} via {}: {}",
+                    otpDocument.getEmail(),
+                    StringUtils.hasText(mailUsername) ? mailUsername : "<empty>",
+                    mailHost,
+                    exception.getMessage());
+
+            if (canUseGmailSslFallback()) {
+                try {
+                    buildSslFallbackSender().send(message);
+                    log.info("OTP email sent successfully for {} using Gmail SSL fallback.", otpDocument.getEmail());
+                    return;
+                } catch (MailException fallbackException) {
+                    otpRepository.delete(otpDocument);
+                    log.error("Failed to send OTP email to {} using sender {}. Primary error: {}. Fallback error: {}",
+                            otpDocument.getEmail(),
+                            StringUtils.hasText(mailUsername) ? mailUsername : "<empty>",
+                            exception.getMessage(),
+                            fallbackException.getMessage(),
+                            fallbackException);
+                    throw new IllegalStateException("OTP email could not be sent. Please check the mail setup and try again.", fallbackException);
+                }
+            }
+
             otpRepository.delete(otpDocument);
             log.error("Failed to send OTP email to {} using sender {}",
                     otpDocument.getEmail(),
                     StringUtils.hasText(mailUsername) ? mailUsername : "<empty>", exception);
             throw new IllegalStateException("OTP email could not be sent. Please check the mail setup and try again.", exception);
         }
+    }
+
+    private boolean canUseGmailSslFallback() {
+        return StringUtils.hasText(mailUsername)
+                && StringUtils.hasText(mailPassword)
+                && "smtp.gmail.com".equalsIgnoreCase(mailHost);
+    }
+
+    private JavaMailSender buildSslFallbackSender() {
+        JavaMailSenderImpl fallbackSender = new JavaMailSenderImpl();
+        fallbackSender.setHost(mailHost);
+        fallbackSender.setPort(465);
+        fallbackSender.setUsername(mailUsername);
+        fallbackSender.setPassword(mailPassword);
+        fallbackSender.setDefaultEncoding(StandardCharsets.UTF_8.name());
+
+        Properties properties = fallbackSender.getJavaMailProperties();
+        properties.put("mail.transport.protocol", "smtp");
+        properties.put("mail.smtp.auth", "true");
+        properties.put("mail.smtp.ssl.enable", "true");
+        properties.put("mail.smtp.starttls.enable", "false");
+        properties.put("mail.smtp.connectiontimeout", "15000");
+        properties.put("mail.smtp.timeout", "15000");
+        properties.put("mail.smtp.writetimeout", "15000");
+        properties.put("mail.smtp.ssl.trust", mailHost);
+        properties.put("mail.debug", "false");
+        return fallbackSender;
     }
 
     private String normalizeEmail(String email) {
