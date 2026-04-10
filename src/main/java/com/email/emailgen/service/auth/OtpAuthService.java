@@ -1,6 +1,7 @@
 package com.email.emailgen.service.auth;
 
 import com.email.emailgen.config.AuthProperties;
+import com.email.emailgen.config.ResendProperties;
 import com.email.emailgen.dto.auth.AccountStatusResponse;
 import com.email.emailgen.dto.auth.AuthResponse;
 import com.email.emailgen.dto.auth.MessageResponse;
@@ -19,12 +20,16 @@ import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
 import org.springframework.util.StringUtils;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
 @Service
@@ -37,6 +42,8 @@ public class OtpAuthService {
     private final JavaMailSender javaMailSender;
     private final JwtService jwtService;
     private final AuthProperties authProperties;
+    private final ResendProperties resendProperties;
+    private final WebClient.Builder webClientBuilder;
     private final PasswordEncoder passwordEncoder;
     @Value("${spring.mail.username:}")
     private String mailUsername;
@@ -177,6 +184,11 @@ public class OtpAuthService {
             return;
         }
 
+        if (resendProperties.canSend()) {
+            sendOtpEmailWithResend(otpDocument);
+            return;
+        }
+
         SimpleMailMessage message = new SimpleMailMessage();
         if (StringUtils.hasText(mailUsername)) {
             message.setFrom(mailUsername);
@@ -195,7 +207,7 @@ public class OtpAuthService {
         try {
             javaMailSender.send(message);
         } catch (MailException exception) {
-            log.warn("Primary OTP email send failed for {} using sender {} via {}: {}",
+            log.warn("SMTP OTP email send failed for {} using sender {} via {}: {}",
                     otpDocument.getEmail(),
                     StringUtils.hasText(mailUsername) ? mailUsername : "<empty>",
                     mailHost,
@@ -204,11 +216,11 @@ public class OtpAuthService {
             if (canUseGmailSslFallback()) {
                 try {
                     buildSslFallbackSender().send(message);
-                    log.info("OTP email sent successfully for {} using Gmail SSL fallback.", otpDocument.getEmail());
+                    log.info("OTP email sent successfully for {} using Gmail SSL fallback on port 465.", otpDocument.getEmail());
                     return;
                 } catch (MailException fallbackException) {
                     otpRepository.delete(otpDocument);
-                    log.error("Failed to send OTP email to {} using sender {}. Primary error: {}. Fallback error: {}",
+                    log.error("Failed to send OTP email to {} using sender {}. SMTP 587 error: {}. SSL 465 fallback error: {}",
                             otpDocument.getEmail(),
                             StringUtils.hasText(mailUsername) ? mailUsername : "<empty>",
                             exception.getMessage(),
@@ -219,9 +231,53 @@ public class OtpAuthService {
             }
 
             otpRepository.delete(otpDocument);
-            log.error("Failed to send OTP email to {} using sender {}",
+            log.error("Failed to send OTP email to {} using sender {} after SMTP attempt",
                     otpDocument.getEmail(),
                     StringUtils.hasText(mailUsername) ? mailUsername : "<empty>", exception);
+            throw new IllegalStateException("OTP email could not be sent. Please check the mail setup and try again.", exception);
+        }
+    }
+
+    private void sendOtpEmailWithResend(OtpDocument otpDocument) {
+        Map<String, Object> payload = Map.of(
+                "from", resendProperties.getFromEmail(),
+                "to", List.of(otpDocument.getEmail()),
+                "subject", authProperties.getMail().getSubject(),
+                "html", """
+                        <p>Your QuickMail OTP is: <strong>%s</strong></p>
+                        <p>This OTP will expire in %d minutes.</p>
+                        <p>If you did not request this OTP, you can safely ignore this email.</p>
+                        """.formatted(otpDocument.getOtp(), authProperties.getOtp().getExpiry().toMinutes())
+        );
+
+        try {
+            webClientBuilder
+                    .baseUrl(resendProperties.getApiUrl())
+                    .build()
+                    .post()
+                    .uri("/emails")
+                    .header("Authorization", "Bearer " + resendProperties.getApiKey())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .bodyValue(payload)
+                    .retrieve()
+                    .toBodilessEntity()
+                    .block(resendProperties.getTimeout());
+            log.info("OTP email sent successfully for {} using Resend API.", otpDocument.getEmail());
+        } catch (WebClientResponseException exception) {
+            otpRepository.delete(otpDocument);
+            log.error("Resend API rejected OTP email for {} with status {} and body {}",
+                    otpDocument.getEmail(),
+                    exception.getStatusCode(),
+                    exception.getResponseBodyAsString(),
+                    exception);
+            throw new IllegalStateException("OTP email could not be sent. Resend rejected the request.", exception);
+        } catch (Exception exception) {
+            otpRepository.delete(otpDocument);
+            log.error("Failed to send OTP email to {} using Resend API: {}",
+                    otpDocument.getEmail(),
+                    exception.getMessage(),
+                    exception);
             throw new IllegalStateException("OTP email could not be sent. Please check the mail setup and try again.", exception);
         }
     }
