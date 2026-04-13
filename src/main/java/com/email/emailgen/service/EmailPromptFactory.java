@@ -15,12 +15,14 @@ public class EmailPromptFactory {
         String tone = normalizeTone(request.getTone());
         String mode = normalizeMode(request.getMode(), request.getEmailContent());
         String userInstruction = normalizeUserInstruction(request.getUserInstruction());
+        String detectedIntent = detectIntent(mode, userInstruction, request.getEmailContent());
+        String lengthInstruction = buildLengthInstruction(tone, userInstruction);
 
         if ("compose".equals(mode)) {
-            return buildComposePrompt(request, tone, userInstruction);
+            return buildComposePrompt(request, tone, userInstruction, detectedIntent, lengthInstruction);
         }
 
-        return buildReplyPrompt(request, tone, userInstruction);
+        return buildReplyPrompt(request, tone, userInstruction, detectedIntent, lengthInstruction);
     }
 
     public String normalizeTone(String tone) {
@@ -44,8 +46,14 @@ public class EmailPromptFactory {
         return userInstruction.trim();
     }
 
-    private String buildReplyPrompt(EmailRequest request, String tone, String userInstruction) {
+    private String buildReplyPrompt(EmailRequest request,
+                                    String tone,
+                                    String userInstruction,
+                                    String detectedIntent,
+                                    String lengthInstruction) {
         String variationInstruction = buildVariationInstruction(request);
+        boolean summaryRequest = isSummaryRequest(tone, userInstruction);
+        boolean suggestedReplyRequest = isSuggestedReplyRequest(tone, userInstruction);
         String instructionBlock = userInstruction.isBlank()
                 ? ""
                 : """
@@ -57,30 +65,64 @@ public class EmailPromptFactory {
 
                 """.formatted(userInstruction);
 
-        return """
-                You are an expert executive email assistant.
+        String taskInstruction = summaryRequest
+                ? """
+                Summarize the email instead of drafting a reply.
+                Return a crisp summary of the sender's key points, decisions, and any action items.
+                If useful, use short bullet points. Do not write it as an outgoing email.
+                """
+                : """
+                Write a reply that directly addresses the sender's message.
+                %s
+                """.formatted(suggestedReplyRequest
+                ? "Treat this as a suggested reply draft that the user can quickly send or edit."
+                : "Treat this as a direct reply draft from the user.");
 
-                Read the incoming email carefully and write a reply that directly addresses the sender's message.
+        return """
+                You are a practical email writing assistant.
+
+                Read the incoming email carefully.
+                %s
 
                 Reply requirements:
                 - Tone: %s
+                - Detected intent: %s
+                - Response length: %s
                 - Understand the sender's main request, question, or concern before replying.
-                - Address the important points from the original email instead of giving a generic response.
+                - Address the important points from the original email instead of giving a vague or generic response.
                 - Keep the reply concise, clear, and natural.
                 - If details are missing, respond politely without inventing facts.
                 - If the user instruction asks to approve, reject, delay, escalate, or soften the tone, follow that direction.
                 - Do not include a subject line.
-                - Output only the email reply body.
+                - Output only the requested result for this task.
+                - If the user gives extra instructions, follow them as long as they stay relevant to the email.
 
                 %s%s
                 Original email:
                 %s
-                """.formatted(tone, variationInstruction, instructionBlock, request.getEmailContent().trim());
+                """.formatted(taskInstruction.stripTrailing(), tone, detectedIntent, lengthInstruction,
+                variationInstruction, instructionBlock, request.getEmailContent().trim());
     }
 
-    private String buildComposePrompt(EmailRequest request, String tone, String userInstruction) {
+    private String buildComposePrompt(EmailRequest request,
+                                      String tone,
+                                      String userInstruction,
+                                      String detectedIntent,
+                                      String lengthInstruction) {
+        boolean shouldIncludeFullEmail = shouldIncludeFullEmailFormat(userInstruction);
+        String formatInstruction = shouldIncludeFullEmail
+                ? """
+                - Include a clear subject line at the top.
+                - Include a suitable greeting, message body, and professional closing.
+                - Format the output like a complete ready-to-send email.
+                """
+                : """
+                - Do not include a subject line.
+                - Output only the email body.
+                """;
+
         return """
-                You are an expert executive email writing assistant.
+                You are a practical email writing assistant.
 
                 Write a brand-new email based on the user's instruction.
                 Always write the email from the user's point of view.
@@ -94,6 +136,8 @@ public class EmailPromptFactory {
 
                 Compose requirements:
                 - Tone: %s
+                - Detected intent: %s
+                - Response length: %s
                 - Understand the user's goal, recipient, and intent from the instruction.
                 - Detect the meaning of the instruction even if the user writes in Hindi, Hinglish, mixed language, or with grammar and spelling mistakes.
                 - Automatically correct grammar, spelling, and wording mistakes before drafting the email.
@@ -102,7 +146,7 @@ public class EmailPromptFactory {
                 - Never generate a reply from the recipient's side unless the user clearly asks for that exact perspective.
                 - Identify the real action the user wants. If they want a return, refund, replacement, leave approval, complaint resolution, escalation, or follow-up, draft an email that directly asks for that action.
                 - Do not turn the email into a weak generic information request unless the user explicitly asks only for information.
-                - If the user reports a damaged, defective, missing, delayed, or wrong product, write a strong but polite customer email asking for the appropriate resolution such as return, refund, or replacement.
+                - If the user reports a damaged, defective, missing, delayed, or wrong product, write a clear and polite customer email asking for the appropriate resolution such as return, refund, or replacement.
                 - If the user implies approval, rejection, leave request, complaint, customer support request, or any other scenario, write accordingly.
                 - Support the user's language naturally. If the user writes in Hindi, Hinglish, or another language, match the request appropriately unless they ask for something else.
                 - If important details are missing, keep the email reasonably generic instead of inventing fake facts.
@@ -110,11 +154,10 @@ public class EmailPromptFactory {
                 - Detect who the email is for and choose a suitable greeting automatically.
                 - If the user mentions a recipient type instead of a name, use a suitable greeting such as "Dear Customer Support Team," "Dear Hiring Manager," "Dear Sir," "Dear Ma'am," or "Dear Sir/Madam," when appropriate.
                 - If the user gives instructions in casual language, local language, Hindi, Hinglish, or mixed language, first understand the meaning and then write a proper email accordingly.
-                - Prefer confident, useful wording over vague wording. The email should feel ready to send.
+                - Prefer clear, useful wording over vague wording. The email should feel ready to send.
                 - For customer support scenarios, mention the issue clearly and request a concrete next step.
                 - Use a realistic opening and closing when appropriate.
-                - Do not include a subject line.
-                - Output only the email body.
+                %s
 
                 Correct behavior examples:
                 - User instruction: "customer support ko damaged shoes ke return ke liye email likho"
@@ -129,7 +172,111 @@ public class EmailPromptFactory {
 
                 User instruction:
                 %s
-                """.formatted(tone, userInstruction);
+                """.formatted(tone, detectedIntent, lengthInstruction, formatInstruction.stripTrailing(), userInstruction);
+    }
+
+    private boolean shouldIncludeFullEmailFormat(String userInstruction) {
+        if (userInstruction == null || userInstruction.isBlank()) {
+            return false;
+        }
+
+        String normalizedInstruction = userInstruction.toLowerCase();
+        return normalizedInstruction.contains("subject")
+                || normalizedInstruction.contains("greeting")
+                || normalizedInstruction.contains("closing")
+                || normalizedInstruction.contains("full email")
+                || normalizedInstruction.contains("complete email")
+                || normalizedInstruction.contains("subject line")
+                || normalizedInstruction.contains("message and closing")
+                || normalizedInstruction.contains("message aur closing")
+                || normalizedInstruction.contains("subject, greeting")
+                || normalizedInstruction.contains("greeting, message")
+                || normalizedInstruction.contains("greeting aur closing");
+    }
+
+    private boolean isSummaryRequest(String tone, String userInstruction) {
+        String normalizedTone = tone == null ? "" : tone.trim().toLowerCase();
+        String normalizedInstruction = userInstruction == null ? "" : userInstruction.toLowerCase();
+        return "summarize".equals(normalizedTone)
+                || normalizedInstruction.contains("summarize")
+                || normalizedInstruction.contains("summary")
+                || normalizedInstruction.contains("summarise")
+                || normalizedInstruction.contains("short summary")
+                || normalizedInstruction.contains("summarise this email");
+    }
+
+    private boolean isSuggestedReplyRequest(String tone, String userInstruction) {
+        String normalizedTone = tone == null ? "" : tone.trim().toLowerCase();
+        String normalizedInstruction = userInstruction == null ? "" : userInstruction.toLowerCase();
+        return "reply suggestion".equals(normalizedTone)
+                || normalizedInstruction.contains("suggest a reply")
+                || normalizedInstruction.contains("suggest reply")
+                || normalizedInstruction.contains("reply suggestion");
+    }
+
+    private String buildLengthInstruction(String tone, String userInstruction) {
+        String normalizedTone = tone == null ? "" : tone.trim().toLowerCase();
+        String normalizedInstruction = userInstruction == null ? "" : userInstruction.toLowerCase();
+
+        if ("concise".equals(normalizedTone)
+                || normalizedInstruction.contains("short")
+                || normalizedInstruction.contains("brief")
+                || normalizedInstruction.contains("concise")
+                || normalizedInstruction.contains("one line")
+                || normalizedInstruction.contains("2 line")
+                || normalizedInstruction.contains("2 lines")) {
+            return "short";
+        }
+
+        if (normalizedInstruction.contains("detailed")
+                || normalizedInstruction.contains("detail")
+                || normalizedInstruction.contains("elaborate")
+                || normalizedInstruction.contains("full detail")
+                || normalizedInstruction.contains("long")) {
+            return "detailed";
+        }
+
+        if (normalizedInstruction.contains("medium")) {
+            return "medium";
+        }
+
+        if (isSummaryRequest(tone, userInstruction)) {
+            return "short";
+        }
+
+        return "medium";
+    }
+
+    private String detectIntent(String mode, String userInstruction, String emailContent) {
+        String combined = ((userInstruction == null ? "" : userInstruction) + " "
+                + (emailContent == null ? "" : emailContent)).toLowerCase();
+
+        if (isSummaryRequest("", userInstruction)) {
+            return "email summary";
+        }
+        if (combined.contains("leave") || combined.contains("chutti") || combined.contains("absent")) {
+            return "leave request";
+        }
+        if (combined.contains("complaint") || combined.contains("issue") || combined.contains("problem")) {
+            return "complaint";
+        }
+        if (combined.contains("refund")) {
+            return "refund request";
+        }
+        if (combined.contains("return")) {
+            return "return request";
+        }
+        if (combined.contains("apology") || combined.contains("sorry")) {
+            return "apology";
+        }
+        if (combined.contains("follow up") || combined.contains("follow-up")) {
+            return "follow-up";
+        }
+        if (combined.contains("rewrite") || combined.contains("rephrase")) {
+            return "rewrite";
+        }
+
+        return "compose".equals(mode) ? "new outbound email" : "reply draft";
     }
 
     private String buildVariationInstruction(EmailRequest request) {
