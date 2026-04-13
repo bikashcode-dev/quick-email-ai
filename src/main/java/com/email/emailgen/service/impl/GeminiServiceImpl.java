@@ -1,7 +1,7 @@
 package com.email.emailgen.service.impl;
 
 import com.email.emailgen.config.AIProperties;
-import com.email.emailgen.config.GeminiProperties;
+import com.email.emailgen.config.GoogolGeminiProperties;
 import com.email.emailgen.dto.AIResponse;
 import com.email.emailgen.exception.AIClientException;
 import com.email.emailgen.service.AIService;
@@ -24,12 +24,12 @@ import java.util.Map;
 public class GeminiServiceImpl implements AIService {
 
     private final WebClient webClient;
-    private final GeminiProperties geminiProperties;
+    private final GoogolGeminiProperties geminiProperties;
     private final AIProperties aiProperties;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public GeminiServiceImpl(WebClient.Builder builder,
-                             GeminiProperties geminiProperties,
+                             GoogolGeminiProperties geminiProperties,
                              AIProperties aiProperties) {
         this.webClient = builder.baseUrl(geminiProperties.getApiUrl()).build();
         this.geminiProperties = geminiProperties;

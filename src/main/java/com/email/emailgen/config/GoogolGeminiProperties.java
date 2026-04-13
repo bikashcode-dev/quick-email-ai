@@ -12,7 +12,7 @@ import java.time.Duration;
 @Setter
 @Validated
 @ConfigurationProperties(prefix = "gemini")
-public class GeminiProperties {
+public class GoogolGeminiProperties {
     @NotBlank
     private String apiUrl;
     @NotBlank
