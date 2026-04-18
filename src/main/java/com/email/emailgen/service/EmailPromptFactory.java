@@ -110,6 +110,7 @@ public class EmailPromptFactory {
                                       String detectedIntent,
                                       String lengthInstruction) {
         boolean shouldIncludeFullEmail = shouldIncludeFullEmailFormat(userInstruction);
+        boolean conciseCompose = shouldPreferConciseCompose(detectedIntent, userInstruction, lengthInstruction);
         String formatInstruction = shouldIncludeFullEmail
                 ? """
                 - Include a clear subject line at the top.
@@ -150,6 +151,8 @@ public class EmailPromptFactory {
                 - If the user implies approval, rejection, leave request, complaint, customer support request, or any other scenario, write accordingly.
                 - Support the user's language naturally. If the user writes in Hindi, Hinglish, or another language, match the request appropriately unless they ask for something else.
                 - If important details are missing, keep the email reasonably generic instead of inventing fake facts.
+                - Do not insert bracket placeholders like "[start date]", "[end date]", "[Your Name]", or similar unless the user explicitly asks for a template.
+                - If a detail is missing, either omit it or mention it naturally without placeholder brackets.
                 - If the user asks for a complaint, return, refund, leave request, approval, rejection, escalation, apology, or follow-up email, draft that exact kind of email.
                 - Detect who the email is for and choose a suitable greeting automatically.
                 - If the user mentions a recipient type instead of a name, use a suitable greeting such as "Dear Customer Support Team," "Dear Hiring Manager," "Dear Sir," "Dear Ma'am," or "Dear Sir/Madam," when appropriate.
@@ -157,6 +160,9 @@ public class EmailPromptFactory {
                 - Prefer clear, useful wording over vague wording. The email should feel ready to send.
                 - For customer support scenarios, mention the issue clearly and request a concrete next step.
                 - Use a realistic opening and closing when appropriate.
+                - Avoid unnecessary filler such as long apologies, repeated gratitude, or formal boilerplate when the request is simple.
+                - When the request is simple, keep the email short and direct.
+                %s
                 %s
 
                 Correct behavior examples:
@@ -169,10 +175,15 @@ public class EmailPromptFactory {
                 - User instruction: "HOD ko apology mail likho"
                   Correct style: write an apology email from the user to the HOD.
                   Wrong style: write a reply from the HOD to the user.
+                - User instruction: "email liko for leave ke liye 5 din ki reason fever"
+                  Correct style: "Dear Sir, I am feeling unwell due to fever and would like to request leave for the next five days. I would be grateful for your approval. Thank you."
+                  Wrong style: add placeholders like "[start date]" or a long generic paragraph.
 
                 User instruction:
                 %s
-                """.formatted(tone, detectedIntent, lengthInstruction, formatInstruction.stripTrailing(), userInstruction);
+                """.formatted(tone, detectedIntent, lengthInstruction,
+                conciseCompose ? "- Prefer 4 to 6 sentences at most unless the user asks for a detailed email." : "",
+                formatInstruction.stripTrailing(), userInstruction);
     }
 
     private boolean shouldIncludeFullEmailFormat(String userInstruction) {
@@ -244,7 +255,27 @@ public class EmailPromptFactory {
             return "short";
         }
 
+        if (normalizedInstruction.contains("leave")
+                || normalizedInstruction.contains("chutti")
+                || normalizedInstruction.contains("absent")
+                || normalizedInstruction.contains("fever")
+                || normalizedInstruction.contains("health issue")) {
+            return "short";
+        }
+
         return "medium";
+    }
+
+    private boolean shouldPreferConciseCompose(String detectedIntent, String userInstruction, String lengthInstruction) {
+        if ("short".equals(lengthInstruction)) {
+            return true;
+        }
+
+        String normalizedInstruction = userInstruction == null ? "" : userInstruction.toLowerCase();
+        return "leave request".equals(detectedIntent)
+                || normalizedInstruction.contains("simple")
+                || normalizedInstruction.contains("clear")
+                || normalizedInstruction.contains("natural");
     }
 
     private String detectIntent(String mode, String userInstruction, String emailContent) {

@@ -97,4 +97,21 @@ class EmailPromptFactoryTest {
         assertTrue(prompt.contains("- Detected intent: leave request"));
         assertTrue(prompt.contains("- Response length: short"));
     }
+
+    @Test
+    void shouldDiscouragePlaceholdersForSimpleLeaveEmails() {
+        AIProperties properties = new AIProperties();
+        properties.getPrompt().setDefaultTone("professional");
+
+        EmailPromptFactory factory = new EmailPromptFactory(properties);
+        EmailRequest request = new EmailRequest();
+        request.setMode("compose");
+        request.setUserInstruction("email liko for leave ke liye 5 din ki reason fever");
+
+        String prompt = factory.buildPrompt(request);
+
+        assertTrue(prompt.contains("Do not insert bracket placeholders like \"[start date]\", \"[end date]\", \"[Your Name]\", or similar"));
+        assertTrue(prompt.contains("Prefer 4 to 6 sentences at most unless the user asks for a detailed email."));
+        assertTrue(prompt.contains("Wrong style: add placeholders like \"[start date]\" or a long generic paragraph."));
+    }
 }
